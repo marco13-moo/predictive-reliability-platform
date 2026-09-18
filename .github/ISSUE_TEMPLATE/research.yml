@@ -1,0 +1,7 @@
+name: Research proposal
+description: Explore an uncertain technical direction
+body:
+  - type: textarea
+    id: question
+    attributes: {label: Question, scope, and success criteria}
+    validations: {required: true}
