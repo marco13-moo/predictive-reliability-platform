@@ -21,9 +21,18 @@ func (d Detector) Detect(service, metric string, points []contracts.MetricPoint)
 	if len(points) < d.MinSamples {
 		return nil
 	}
-	sort.Slice(points, func(i, j int) bool { return points[i].Timestamp.Before(points[j].Timestamp) })
-	vals := make([]float64, len(points))
-	for i, p := range points {
+	ordered := append([]contracts.MetricPoint(nil), points...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].Timestamp.Equal(ordered[j].Timestamp) {
+			return ordered[i].ID < ordered[j].ID
+		}
+		return ordered[i].Timestamp.Before(ordered[j].Timestamp)
+	})
+	vals := make([]float64, len(ordered))
+	for i, p := range ordered {
+		if math.IsNaN(p.Value) || math.IsInf(p.Value, 0) {
+			return nil
+		}
 		vals[i] = p.Value
 	}
 	mean := 0.0
@@ -40,10 +49,10 @@ func (d Detector) Detect(service, metric string, points []contracts.MetricPoint)
 		return nil
 	}
 	out := []contracts.Anomaly{}
-	for _, p := range points {
+	for _, p := range ordered {
 		z := math.Abs((p.Value - mean) / sd)
 		if z >= d.ZThreshold {
-			out = append(out, contracts.Anomaly{Timestamp: p.Timestamp, Service: service, Metric: metric, Score: z, Value: p.Value, Baseline: mean, Reason: "z-score exceeded threshold"})
+			out = append(out, contracts.Anomaly{Timestamp: p.Timestamp, TenantID: p.TenantID, Service: service, Metric: metric, Score: z, Value: p.Value, Baseline: mean, Reason: "z-score exceeded threshold", DetectorVersion: "baseline-zscore/v1", Threshold: d.ZThreshold, EvidenceStart: ordered[0].Timestamp, EvidenceEnd: ordered[len(ordered)-1].Timestamp})
 		}
 	}
 	return out

@@ -8,10 +8,12 @@ import (
 )
 
 type Metrics struct {
-	TruePositives, FalsePositives, FalseNegatives int
-	Precision, Recall, F1, FalsePositiveRate      float64
-	DetectionLatency                              time.Duration
-	RemediationSafetyRate                         float64
+	TruePositives, FalsePositives, FalseNegatives   int
+	Precision, Recall, F1, FalsePositiveRate        float64
+	DetectionLatency                                time.Duration
+	RemediationSafetyRate                           float64
+	AlertVolume, LabeledIncidents, UnknownIntervals int
+	FormulaVersion                                  string
 }
 
 func Evaluate(d detector.Detector, points []contracts.MetricPoint, incidents []time.Time) Metrics {
@@ -36,7 +38,7 @@ func Evaluate(d detector.Detector, points []contracts.MetricPoint, incidents []t
 	}
 	fp := len(got) - tp
 	fn := len(incidents) - tp
-	m := Metrics{TruePositives: tp, FalsePositives: fp, FalseNegatives: fn}
+	m := Metrics{TruePositives: tp, FalsePositives: fp, FalseNegatives: fn, AlertVolume: len(got), LabeledIncidents: len(incidents), FormulaVersion: "replay/v1"}
 	if tp+fp > 0 {
 		m.Precision = float64(tp) / float64(tp+fp)
 		m.FalsePositiveRate = float64(fp) / float64(tp+fp)
@@ -71,5 +73,10 @@ func abs(d time.Duration) time.Duration {
 	return d
 }
 func Sort(points []contracts.MetricPoint) {
-	sort.Slice(points, func(i, j int) bool { return points[i].Timestamp.Before(points[j].Timestamp) })
+	sort.SliceStable(points, func(i, j int) bool {
+		if points[i].Timestamp.Equal(points[j].Timestamp) {
+			return points[i].ID < points[j].ID
+		}
+		return points[i].Timestamp.Before(points[j].Timestamp)
+	})
 }

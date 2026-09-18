@@ -3,6 +3,8 @@ package remediation
 import (
 	"fmt"
 	"github.com/marco13-moo/predictive-reliability-platform/pkg/contracts"
+	"strings"
+	"time"
 )
 
 type Action struct {
@@ -11,9 +13,13 @@ type Action struct {
 	RequiresApproval bool
 }
 type Decision struct {
-	Action   Action
-	Approved bool
-	Reason   string
+	Action        Action
+	Approved      bool
+	Reason        string
+	Outcome       string
+	ReasonCodes   []string
+	PolicyVersion string
+	ExpiresAt     time.Time
 }
 type Policy interface {
 	Decide(contracts.Incident, Action, bool) Decision
@@ -21,14 +27,28 @@ type Policy interface {
 type Gate struct{ AutoApproveLowRisk bool }
 
 func (g Gate) Decide(i contracts.Incident, a Action, approved bool) Decision {
+	return g.DecideAt(i, a, approved, time.Now().UTC())
+}
+
+func (g Gate) DecideAt(i contracts.Incident, a Action, approved bool, now time.Time) Decision {
+	d := Decision{Action: a, PolicyVersion: "remediation/v1", Outcome: "deny"}
+	if strings.TrimSpace(i.Service) == "" || strings.TrimSpace(i.ID) == "" {
+		d.Reason, d.ReasonCodes = "missing incident scope or evidence", []string{"missing_scope"}
+		return d
+	}
 	if a.RequiresApproval && !approved {
-		return Decision{Action: a, Reason: "approval required"}
+		d.Reason, d.ReasonCodes, d.Outcome = "approval required", []string{"approval_required"}, "require-approval"
+		return d
 	}
 	if i.Severity == "high" && !approved {
-		return Decision{Action: a, Reason: "high severity requires approval"}
+		d.Reason, d.ReasonCodes, d.Outcome = "high severity requires approval", []string{"severity_requires_approval"}, "require-approval"
+		return d
 	}
 	if a.Risk == "high" && !g.AutoApproveLowRisk && !approved {
-		return Decision{Action: a, Reason: "high risk requires approval"}
+		d.Reason, d.ReasonCodes, d.Outcome = "high risk requires approval", []string{"risk_requires_approval"}, "require-approval"
+		return d
 	}
-	return Decision{Action: a, Approved: true, Reason: fmt.Sprintf("policy accepted for %s", i.Service)}
+	d.Approved, d.Outcome, d.Reason = true, "allow-recommendation", fmt.Sprintf("policy accepted for %s", i.Service)
+	d.ExpiresAt = now.UTC().Add(time.Hour)
+	return d
 }

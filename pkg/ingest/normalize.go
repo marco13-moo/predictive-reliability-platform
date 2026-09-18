@@ -37,7 +37,17 @@ func Normalize(r Raw) (contracts.Event, error) {
 	for key, val := range r.Labels {
 		labels[strings.ToLower(strings.TrimSpace(key))] = strings.TrimSpace(val)
 	}
-	e := contracts.Event{ID: r.ID, SchemaVersion: v, TenantID: strings.TrimSpace(r.TenantID), Kind: k, Source: strings.TrimSpace(r.Source), Service: strings.TrimSpace(r.Service), Timestamp: t.UTC(), Name: strings.TrimSpace(r.Name), Value: r.Value, Labels: labels, Message: strings.TrimSpace(r.Message), Provenance: r.Provenance}
+	p := r.Provenance
+	if strings.TrimSpace(p.Connector) == "" {
+		p.Connector = strings.TrimSpace(r.Source)
+		if p.Connector == "" {
+			p.Connector = "unknown"
+		}
+	}
+	if strings.TrimSpace(p.ParserVersion) == "" {
+		p.ParserVersion = "normalize/v1"
+	}
+	e := contracts.Event{ID: r.ID, SchemaVersion: v, TenantID: strings.TrimSpace(r.TenantID), Kind: k, Source: strings.TrimSpace(r.Source), Service: strings.TrimSpace(r.Service), Timestamp: t.UTC(), Name: strings.TrimSpace(r.Name), Unit: "count", Value: r.Value, Labels: labels, Message: strings.TrimSpace(r.Message), Provenance: p}
 	return e, e.Validate()
 }
 func Batch(raw []Raw) ([]contracts.Event, []error) {

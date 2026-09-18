@@ -8,7 +8,16 @@ import (
 )
 
 func Rank(service string, correlations []contracts.Correlation) contracts.Incident {
-	sort.Slice(correlations, func(i, j int) bool { return correlations[i].Score > correlations[j].Score })
+	return RankAt(service, correlations, time.Now().UTC())
+}
+
+func RankAt(service string, correlations []contracts.Correlation, now time.Time) contracts.Incident {
+	sort.SliceStable(correlations, func(i, j int) bool {
+		if correlations[i].Score == correlations[j].Score {
+			return correlations[i].Anomaly.Timestamp.Before(correlations[j].Anomaly.Timestamp)
+		}
+		return correlations[i].Score > correlations[j].Score
+	})
 	hs := make([]contracts.Hypothesis, 0, len(correlations))
 	for _, c := range correlations {
 		p := c.Score
@@ -21,5 +30,5 @@ func Rank(service string, correlations []contracts.Correlation) contracts.Incide
 	if len(hs) > 0 && hs[0].Probability > .5 {
 		sev = "high"
 	}
-	return contracts.Incident{ID: fmt.Sprintf("inc-%d", time.Now().UnixNano()), Service: service, Severity: sev, StartedAt: time.Now().UTC(), Hypotheses: hs}
+	return contracts.Incident{ID: fmt.Sprintf("inc-%d", now.UnixNano()), Service: service, Severity: sev, StartedAt: now.UTC(), Hypotheses: hs}
 }
