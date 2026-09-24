@@ -15,3 +15,14 @@ func TestBatchOrderingAndIdempotency(t *testing.T) {
 		t.Fatalf("got=%v errs=%v", got, errs)
 	}
 }
+
+func TestNormalizeRejectsNormalizedLabelCollisions(t *testing.T) {
+	_, err := Normalize(Raw{
+		ID: "1", Kind: "metric", Service: "api", TenantID: "t",
+		Timestamp: "2026-01-01T00:00:00Z",
+		Labels:    map[string]string{"Status": "ok", " status ": "degraded"},
+	})
+	if err == nil {
+		t.Fatal("expected normalized label collision to be rejected")
+	}
+}

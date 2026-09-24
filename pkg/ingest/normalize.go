@@ -18,7 +18,8 @@ type Raw struct {
 }
 
 func Normalize(r Raw) (contracts.Event, error) {
-	if strings.TrimSpace(r.ID) == "" || strings.TrimSpace(r.Service) == "" || strings.TrimSpace(r.TenantID) == "" {
+	id := strings.TrimSpace(r.ID)
+	if id == "" || strings.TrimSpace(r.Service) == "" || strings.TrimSpace(r.TenantID) == "" {
 		return contracts.Event{}, fmt.Errorf("id, service, and tenant id are required")
 	}
 	t, err := time.Parse(time.RFC3339Nano, r.Timestamp)
@@ -35,7 +36,14 @@ func Normalize(r Raw) (contracts.Event, error) {
 	}
 	labels := map[string]string{}
 	for key, val := range r.Labels {
-		labels[strings.ToLower(strings.TrimSpace(key))] = strings.TrimSpace(val)
+		normalizedKey := strings.ToLower(strings.TrimSpace(key))
+		if normalizedKey == "" {
+			return contracts.Event{}, fmt.Errorf("label key is required")
+		}
+		if _, exists := labels[normalizedKey]; exists {
+			return contracts.Event{}, fmt.Errorf("duplicate label key after normalization: %q", normalizedKey)
+		}
+		labels[normalizedKey] = strings.TrimSpace(val)
 	}
 	p := r.Provenance
 	if strings.TrimSpace(p.Connector) == "" {
@@ -47,7 +55,7 @@ func Normalize(r Raw) (contracts.Event, error) {
 	if strings.TrimSpace(p.ParserVersion) == "" {
 		p.ParserVersion = "normalize/v1"
 	}
-	e := contracts.Event{ID: r.ID, SchemaVersion: v, TenantID: strings.TrimSpace(r.TenantID), Kind: k, Source: strings.TrimSpace(r.Source), Service: strings.TrimSpace(r.Service), Timestamp: t.UTC(), Name: strings.TrimSpace(r.Name), Unit: "count", Value: r.Value, Labels: labels, Message: strings.TrimSpace(r.Message), Provenance: p}
+	e := contracts.Event{ID: id, SchemaVersion: v, TenantID: strings.TrimSpace(r.TenantID), Kind: k, Source: strings.TrimSpace(r.Source), Service: strings.TrimSpace(r.Service), Timestamp: t.UTC(), Name: strings.TrimSpace(r.Name), Unit: "count", Value: r.Value, Labels: labels, Message: strings.TrimSpace(r.Message), Provenance: p}
 	return e, e.Validate()
 }
 func Batch(raw []Raw) ([]contracts.Event, []error) {
